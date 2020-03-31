@@ -14,6 +14,6 @@ export default {
 			format: "es",
 		},
 	],
-	external: ["@samuelmeuli/font-manager", "react"],
+	external: ["@creator-kit/font-manager", "react"],
 	plugins: [typescript()],
 };

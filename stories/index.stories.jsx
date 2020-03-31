@@ -1,6 +1,9 @@
 import "./styles.css";
+import "@shopify/polaris/styles.css";
+import enTranslations from "@shopify/polaris/locales/en.json";
 
 import { storiesOf } from "@storybook/react";
+import { AppProvider } from "@shopify/polaris";
 import React, { useState } from "react";
 
 import FontPicker from "../dist/FontPicker.es";
@@ -10,14 +13,16 @@ const API_KEY = "AIzaSyAOkdDlx49HCSBdu86oe8AD1Q7piIxlR6k";
 function OnePicker() {
 	const [activeFontFamily, setActiveFontFamily] = useState("Open Sans");
 	return (
-		<div className="wrapper">
-			<FontPicker
-				apiKey={API_KEY}
-				activeFontFamily={activeFontFamily}
-				onChange={nextFont => setActiveFontFamily(nextFont.family)}
-			/>
-			<p className="apply-font">The font will be applied to this text.</p>
-		</div>
+		<AppProvider i18n={enTranslations}>
+			<div className="wrapper">
+				<FontPicker
+					apiKey={API_KEY}
+					activeFontFamily={activeFontFamily}
+					onChange={nextFont => setActiveFontFamily(nextFont.family)}
+				/>
+				<p className="apply-font">The font will be applied to this text.</p>
+			</div>
+		</AppProvider>
 	);
 }
 
@@ -25,7 +30,7 @@ function TwoPickers() {
 	const [activeFontFamily1, setActiveFontFamily1] = useState("Open Sans");
 	const [activeFontFamily2, setActiveFontFamily2] = useState("Barlow");
 	return (
-		<div>
+		<AppProvider>
 			<div className="wrapper">
 				<FontPicker
 					apiKey={API_KEY}
@@ -44,7 +49,7 @@ function TwoPickers() {
 				/>
 				<p className="apply-font-2">The font will be applied to this text.</p>
 			</div>
-		</div>
+		</AppProvider>
 	);
 }
 

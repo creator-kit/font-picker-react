@@ -8,8 +8,10 @@ import {
 	Script,
 	SortOption,
 	Variant,
-} from "@samuelmeuli/font-manager";
-import React, { KeyboardEvent, PureComponent, ReactElement } from "react";
+} from "@creator-kit/font-manager";
+import { Button, Popover, Spinner, TextField, TextStyle } from "@shopify/polaris";
+import React, { useState, useEffect } from "react";
+import styled from "styled-components";
 
 type LoadingStatus = "loading" | "finished" | "error";
 
@@ -30,10 +32,10 @@ interface Props {
 	sort: SortOption;
 }
 
-interface State {
-	expanded: boolean;
-	loadingStatus: LoadingStatus;
-}
+// interface State {
+// 	expanded: boolean;
+// 	loadingStatus: LoadingStatus;
+// }
 
 /**
  * Return the fontId based on the provided font family
@@ -42,46 +44,27 @@ function getFontId(fontFamily: string): string {
 	return fontFamily.replace(/\s+/g, "-").toLowerCase();
 }
 
-export default class FontPicker extends PureComponent<Props, State> {
-	// Instance of the FontManager class used for managing, downloading and applying fonts
-	fontManager: FontManager;
+const FontPicker = ({
+	apiKey,
+	activeFontFamily,
+	pickerId,
+	families,
+	categories,
+	scripts,
+	variants,
+	filter,
+	limit,
+	sort,
+	onChange,
+}: Props) => {
+	const [expanded, setExpanded] = useState(false);
+	const [loadingStatus, setLoadingStatus] = useState<LoadingStatus>("loading");
+	const [fontManager, setFontManager] = useState<FontManager | null>(null);
+	const [searchTerm, setSearchTerm] = useState<string | undefined>();
+	const debouncedSearchTerm = useDebounce(searchTerm, 500);
+	const [fonts, setFontList] = useState<Font[]>([]);
 
-	static defaultProps = {
-		defaultFamily: FONT_FAMILY_DEFAULT,
-		pickerId: OPTIONS_DEFAULTS.pickerId,
-		families: OPTIONS_DEFAULTS.families,
-		categories: OPTIONS_DEFAULTS.categories,
-		scripts: OPTIONS_DEFAULTS.scripts,
-		variants: OPTIONS_DEFAULTS.variants,
-		filter: OPTIONS_DEFAULTS.filter,
-		limit: OPTIONS_DEFAULTS.limit,
-		sort: OPTIONS_DEFAULTS.sort,
-		// eslint-disable-next-line @typescript-eslint/no-empty-function
-		onChange: (): void => {},
-	};
-
-	state: Readonly<State> = {
-		expanded: false,
-		loadingStatus: "loading",
-	};
-
-	constructor(props: Props) {
-		super(props);
-
-		const {
-			apiKey,
-			activeFontFamily,
-			pickerId,
-			families,
-			categories,
-			scripts,
-			variants,
-			filter,
-			limit,
-			sort,
-			onChange,
-		} = this.props;
-
+	useEffect(() => {
 		const options: Options = {
 			pickerId,
 			families,
@@ -92,176 +75,174 @@ export default class FontPicker extends PureComponent<Props, State> {
 			limit,
 			sort,
 		};
-
-		// Initialize FontManager object and generate font list
-		this.fontManager = new FontManager(apiKey, activeFontFamily, options, onChange);
-		this.fontManager
+		const newFontManager = new FontManager(apiKey, activeFontFamily, options, onChange);
+		newFontManager
 			.init()
 			.then((): void => {
-				this.setState({
-					loadingStatus: "finished",
-				});
+				setLoadingStatus("finished");
+				setFontManager(newFontManager);
 			})
 			.catch((err: Error): void => {
 				// On error: Log error message
-				this.setState({
-					loadingStatus: "error",
-				});
+				setLoadingStatus("error");
 				console.error("Error trying to fetch the list of available fonts");
 				console.error(err);
 			});
+	}, []);
 
-		// Function bindings
-		this.onClose = this.onClose.bind(this);
-		this.onSelection = this.onSelection.bind(this);
-		this.setActiveFontFamily = this.setActiveFontFamily.bind(this);
-		this.toggleExpanded = this.toggleExpanded.bind(this);
-	}
-
-	/**
-	 * After every component update, check whether the activeFontFamily prop has changed. If so,
-	 * call this.setActiveFontFamily with the new font
-	 */
-	componentDidUpdate(prevProps: Props): void {
-		const { activeFontFamily, onChange } = this.props;
-
-		// If active font prop has changed: Update font family in font manager and component state
-		if (activeFontFamily !== prevProps.activeFontFamily) {
-			this.setActiveFontFamily(activeFontFamily);
+	useEffect(() => {
+		if (fontManager && activeFontFamily) {
+			fontManager.setActiveFont(activeFontFamily);
 		}
+	}, [activeFontFamily]);
 
-		// If onChange prop has changed: Update onChange function in font manager
-		if (onChange !== prevProps.onChange) {
-			this.fontManager.setOnChange(onChange);
+	useEffect(() => {
+		if (fontManager) {
+			fontManager.setOnChange(onChange);
 		}
-	}
+	}, [onChange]);
 
-	/**
-	 * EventListener for closing the font picker when clicking anywhere outside it
-	 */
-	onClose(e: MouseEvent): void {
-		let targetEl = e.target as Node; // Clicked element
-		const fontPickerEl = document.getElementById(`font-picker${this.fontManager.selectorSuffix}`);
-
-		// eslint-disable-next-line no-constant-condition
-		while (true) {
-			if (targetEl === fontPickerEl) {
-				// Click inside font picker: Exit
-				return;
-			}
-			if (targetEl.parentNode) {
-				// Click outside font picker: Move up the DOM
-				targetEl = targetEl.parentNode;
-			} else {
-				// DOM root is reached: Toggle picker, exit
-				this.toggleExpanded();
-				return;
-			}
+	useEffect(() => {
+		if (!fontManager) {
+			return;
 		}
-	}
-
-	/**
-	 * Update the active font on font button click
-	 */
-	onSelection(e: React.MouseEvent | KeyboardEvent): void {
-		const target = e.target as HTMLButtonElement;
-		const activeFontFamily = target.textContent;
-		if (!activeFontFamily) {
-			throw Error(`Missing font family in clicked font button`);
-		}
-		this.setActiveFontFamily(activeFontFamily);
-		this.toggleExpanded();
-	}
-
-	/**
-	 * Set the specified font as the active font in the fontManager and update activeFontFamily in the
-	 * state
-	 */
-	setActiveFontFamily(activeFontFamily: string): void {
-		this.fontManager.setActiveFont(activeFontFamily);
-	}
-
-	/**
-	 * Generate <ul> with all font families
-	 */
-	generateFontList(fonts: Font[]): ReactElement {
-		const { activeFontFamily } = this.props;
-		const { loadingStatus } = this.state;
-
-		if (loadingStatus !== "finished") {
-			return <div />;
-		}
-		return (
-			<ul className="font-list">
-				{fonts.map(
-					(font): ReactElement => {
-						const isActive = font.family === activeFontFamily;
-						const fontId = getFontId(font.family);
-						return (
-							<li key={fontId} className="font-list-item">
-								<button
-									type="button"
-									id={`font-button-${fontId}${this.fontManager.selectorSuffix}`}
-									className={`font-button ${isActive ? "active-font" : ""}`}
-									onClick={this.onSelection}
-									onKeyPress={this.onSelection}
-								>
-									{font.family}
-								</button>
-							</li>
-						);
-					},
-				)}
-			</ul>
-		);
-	}
-
-	/**
-	 * Expand/collapse the picker's font list
-	 */
-	toggleExpanded(): void {
-		const { expanded } = this.state;
-
-		if (expanded) {
-			this.setState({
-				expanded: false,
-			});
-			document.removeEventListener("click", this.onClose);
+		if (debouncedSearchTerm) {
+			fontManager
+				.searchFont(debouncedSearchTerm)
+				.then(result => result && setFontList(Array.from(result.values())));
 		} else {
-			this.setState({
-				expanded: true,
-			});
-			document.addEventListener("click", this.onClose);
+			setFontList(Array.from(fontManager.getFonts().values()));
 		}
-	}
+	}, [fontManager, debouncedSearchTerm]);
 
-	render(): ReactElement {
-		const { activeFontFamily, sort } = this.props;
-		const { expanded, loadingStatus } = this.state;
-
-		// Extract and sort font list
-		const fonts = Array.from(this.fontManager.getFonts().values());
-		if (sort === "alphabet") {
-			fonts.sort((font1: Font, font2: Font): number => font1.family.localeCompare(font2.family));
+	const onChangeFont = (fontId: string) => {
+		if (fontManager) {
+			fontManager.setActiveFont(fontId);
 		}
+	};
 
-		// Render font picker button and attach font list to it
-		return (
-			<div
-				id={`font-picker${this.fontManager.selectorSuffix}`}
-				className={expanded ? "expanded" : ""}
+	return (
+		<div style={{ height: "250px" }}>
+			<Popover
+				active={expanded}
+				onClose={() => {}}
+				activator={
+					<Button onClick={() => setExpanded(true)} disclosure>
+						{activeFontFamily}
+					</Button>
+				}
 			>
-				<button
-					type="button"
-					className="dropdown-button"
-					onClick={this.toggleExpanded}
-					onKeyPress={this.toggleExpanded}
-				>
-					<p className="dropdown-font-family">{activeFontFamily}</p>
-					<p className={`dropdown-icon ${loadingStatus}`} />
-				</button>
-				{loadingStatus === "finished" && this.generateFontList(fonts)}
-			</div>
-		);
+				{loadingStatus === "finished" ? (
+					<PopupContent>
+						<SearchContainer>
+							<TextField
+								label="Search Google fonts"
+								labelHidden
+								placeholder="Search Google fonts"
+								onChange={value => {
+									setSearchTerm(value);
+								}}
+								clearButton
+								onClearButtonClick={() => setSearchTerm(undefined)}
+								value={searchTerm}
+							></TextField>
+						</SearchContainer>
+						<FontList>
+							{fonts.length === 0 ? (
+								<CenteredContent>
+									<TextStyle variation="subdued">No supplier listed</TextStyle>
+								</CenteredContent>
+							) : null}
+							{fonts.map(font => {
+								const fontId = getFontId(font.family);
+								return (
+									<FontRow
+										key={fontId}
+										id={`font-button-${fontId}${fontManager?.selectorSuffix}`}
+										active={font.family === activeFontFamily}
+										onClick={() => onChangeFont(font.family)}
+									>
+										{font.family}
+									</FontRow>
+								);
+							})}
+						</FontList>
+					</PopupContent>
+				) : (
+					<CenteredContent>
+						<Spinner />
+					</CenteredContent>
+				)}
+			</Popover>
+		</div>
+	);
+};
+
+const useDebounce = (value: any, delay: number) => {
+	const [debouncedValue, setDebouncedValue] = useState(value);
+	useEffect(() => {
+		const handler = setTimeout(() => {
+			setDebouncedValue(value);
+		}, delay);
+
+		return () => {
+			clearTimeout(handler);
+		};
+	}, [value, delay]);
+	return debouncedValue;
+};
+
+FontPicker.defaultProps = {
+	defaultFamily: FONT_FAMILY_DEFAULT,
+	pickerId: OPTIONS_DEFAULTS.pickerId,
+	families: OPTIONS_DEFAULTS.families,
+	categories: OPTIONS_DEFAULTS.categories,
+	scripts: OPTIONS_DEFAULTS.scripts,
+	variants: OPTIONS_DEFAULTS.variants,
+	filter: OPTIONS_DEFAULTS.filter,
+	limit: OPTIONS_DEFAULTS.limit,
+	sort: OPTIONS_DEFAULTS.sort,
+	// eslint-disable-next-line @typescript-eslint/no-empty-function
+	onChange: (): void => {},
+};
+
+const CenteredContent = styled.div`
+	padding: 60px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+`;
+
+const PopupContent = styled.div`
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	height: 250px;
+	width: 300px;
+`;
+
+const SearchContainer = styled.div`
+	padding: 10px;
+	border-bottom: 1px solid #ddd;
+`;
+
+const FontList = styled.div`
+	flex: 1;
+	overflow: auto;
+`;
+
+const FontRow = styled.div<{ active: boolean }>`
+	padding: 10px;
+	padding-left: 12px;
+	border-bottom: 1px solid #eee;
+	transition: all 100ms ease-out;
+	cursor: pointer;
+	background: ${p => (p.active ? "#6471C020" : "#fff")};
+
+	&:hover,
+	&:focus {
+		background: ${p => (p.active ? "#6471C020" : "#f5f6f8")};
 	}
-}
+`;
+
+export default FontPicker;
