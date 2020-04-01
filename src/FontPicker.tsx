@@ -9,7 +9,7 @@ import {
 	SortOption,
 	Variant,
 } from "@creator-kit/font-manager";
-import { Button, Popover, Spinner, TextField, TextStyle } from "@shopify/polaris";
+import { Button, Spinner, TextField, TextStyle } from "@shopify/polaris";
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 
@@ -118,20 +118,16 @@ const FontPicker = ({
 	const onChangeFont = (fontId: string) => {
 		if (fontManager) {
 			fontManager.setActiveFont(fontId);
+			setExpanded(false);
 		}
 	};
 
 	return (
-		<div style={{ height: "250px" }}>
-			<Popover
-				active={expanded}
-				onClose={() => {}}
-				activator={
-					<Button onClick={() => setExpanded(true)} disclosure>
-						{activeFontFamily}
-					</Button>
-				}
-			>
+		<Container>
+			<Button onClick={() => setExpanded(e => !e)} disclosure fullWidth>
+				{activeFontFamily}
+			</Button>
+			<Popover active={expanded}>
 				{loadingStatus === "finished" ? (
 					<PopupContent>
 						<SearchContainer>
@@ -174,7 +170,7 @@ const FontPicker = ({
 					</CenteredContent>
 				)}
 			</Popover>
-		</div>
+		</Container>
 	);
 };
 
@@ -243,6 +239,21 @@ const FontRow = styled.div<{ active: boolean }>`
 	&:focus {
 		background: ${p => (p.active ? "#6471C020" : "#f5f6f8")};
 	}
+`;
+
+const Container = styled.div`
+	position: relative;
+`;
+
+const Popover = styled.div<{ active: boolean }>`
+	margin-top: 10px;
+	display: ${p => (p.active ? "block" : "none")};
+	position: absolute;
+	z-index: 9999;
+	background: white;
+	box-shadow: 0 4px 5px 0 rgba(22, 29, 37, 0.1);
+	border-radius: 4px;
+	border: 1px solid #eee;
 `;
 
 export default FontPicker;
